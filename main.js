@@ -1,184 +1,229 @@
-import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.module.js";
-
-const container = document.getElementById("scene");
+const canvas = document.getElementById("renderCanvas");
 const hint = document.getElementById("hint");
 
-const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0x0f1d10, 10, 140);
-
-const camera = new THREE.PerspectiveCamera(
-  70,
-  window.innerWidth / window.innerHeight,
-  0.1,
-  300
-);
-
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(window.devicePixelRatio);
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setClearColor(0x0f1d10);
-renderer.shadowMap.enabled = true;
-container.appendChild(renderer.domElement);
-
-const clock = new THREE.Clock();
-
-const hemisphere = new THREE.HemisphereLight(0x8ad1ff, 0x1b2d12, 0.6);
-scene.add(hemisphere);
-
-const sun = new THREE.DirectionalLight(0xfff2d8, 1.1);
-sun.position.set(25, 40, 20);
-sun.castShadow = true;
-sun.shadow.mapSize.set(1024, 1024);
-sun.shadow.camera.near = 1;
-sun.shadow.camera.far = 120;
-sun.shadow.camera.left = -40;
-sun.shadow.camera.right = 40;
-sun.shadow.camera.top = 40;
-sun.shadow.camera.bottom = -40;
-scene.add(sun);
-
-const groundGeometry = new THREE.PlaneGeometry(240, 240, 32, 32);
-const groundMaterial = new THREE.MeshStandardMaterial({
-  color: 0x1b3a1e,
-  roughness: 0.9,
-  metalness: 0,
-});
-const ground = new THREE.Mesh(groundGeometry, groundMaterial);
-ground.rotation.x = -Math.PI / 2;
-ground.receiveShadow = true;
-scene.add(ground);
-
-const trunkMaterial = new THREE.MeshStandardMaterial({
-  color: 0x5a3d25,
-  roughness: 1,
-});
-const leafMaterial = new THREE.MeshStandardMaterial({
-  color: 0x2e7d32,
-  roughness: 0.8,
+const engine = new BABYLON.Engine(canvas, true, {
+  preserveDrawingBuffer: true,
+  stencil: true,
 });
 
-const treeGroup = new THREE.Group();
-const treeCount = 160;
-for (let i = 0; i < treeCount; i += 1) {
-  const trunkHeight = 2 + Math.random() * 3;
-  const trunkGeometry = new THREE.CylinderGeometry(0.2, 0.35, trunkHeight, 6);
-  const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
-  trunk.castShadow = true;
-  trunk.receiveShadow = true;
+const createScene = async () => {
+  const scene = new BABYLON.Scene(engine);
+  scene.clearColor = new BABYLON.Color4(0.02, 0.05, 0.03, 1.0);
+  scene.fogMode = BABYLON.Scene.FOGMODE_EXP2;
+  scene.fogDensity = 0.0025;
+  scene.fogColor = new BABYLON.Color3(0.03, 0.07, 0.05);
+  scene.collisionsEnabled = true;
 
-  const canopyHeight = 2.2 + Math.random() * 2.2;
-  const canopyGeometry = new THREE.ConeGeometry(1.4, canopyHeight, 8);
-  const canopy = new THREE.Mesh(canopyGeometry, leafMaterial);
-  canopy.position.y = trunkHeight / 2 + canopyHeight / 2 - 0.4;
-  canopy.castShadow = true;
-
-  const tree = new THREE.Group();
-  tree.add(trunk, canopy);
-
-  const radius = 20 + Math.random() * 90;
-  const angle = Math.random() * Math.PI * 2;
-  tree.position.set(Math.cos(angle) * radius, trunkHeight / 2, Math.sin(angle) * radius);
-  treeGroup.add(tree);
-}
-scene.add(treeGroup);
-
-const fireflies = new THREE.Group();
-const fireflyMaterial = new THREE.MeshStandardMaterial({
-  color: 0xfff5a6,
-  emissive: 0xfff0a0,
-  emissiveIntensity: 1,
-});
-for (let i = 0; i < 30; i += 1) {
-  const glow = new THREE.Mesh(new THREE.SphereGeometry(0.08, 12, 12), fireflyMaterial);
-  glow.position.set(
-    (Math.random() - 0.5) * 40,
-    1.5 + Math.random() * 4,
-    (Math.random() - 0.5) * 40
+  const environmentTexture = BABYLON.CubeTexture.CreateFromPrefilteredData(
+    "https://assets.babylonjs.com/environments/environmentSpecular.env",
+    scene
   );
-  fireflies.add(glow);
-}
-scene.add(fireflies);
+  scene.environmentTexture = environmentTexture;
+  scene.createDefaultSkybox(environmentTexture, true, 1200, 0.6);
 
-camera.position.set(0, 1.6, 6);
+  const camera = new BABYLON.UniversalCamera(
+    "forestCamera",
+    new BABYLON.Vector3(0, 2.2, 8),
+    scene
+  );
+  camera.attachControl(canvas, true);
+  camera.speed = 0.9;
+  camera.angularSensibility = 3500;
+  camera.minZ = 0.1;
+  camera.applyGravity = true;
+  camera.ellipsoid = new BABYLON.Vector3(0.6, 1.1, 0.6);
+  camera.checkCollisions = true;
+  scene.gravity = new BABYLON.Vector3(0, -0.25, 0);
 
-const keys = new Set();
-let pointerLocked = false;
-let yaw = 0;
-let pitch = 0;
+  const hemi = new BABYLON.HemisphericLight(
+    "hemi",
+    new BABYLON.Vector3(0.3, 1, 0.4),
+    scene
+  );
+  hemi.intensity = 0.45;
 
-const walkSpeed = 6;
-const lookSpeed = 0.0025;
+  const sun = new BABYLON.DirectionalLight(
+    "sun",
+    new BABYLON.Vector3(-0.4, -1, -0.2),
+    scene
+  );
+  sun.position = new BABYLON.Vector3(60, 80, 30);
+  sun.intensity = 2.4;
 
-function lockPointer() {
-  renderer.domElement.requestPointerLock();
-}
+  const shadowGenerator = new BABYLON.ShadowGenerator(2048, sun);
+  shadowGenerator.useBlurExponentialShadowMap = true;
+  shadowGenerator.blurKernel = 32;
 
-function onPointerLockChange() {
-  pointerLocked = document.pointerLockElement === renderer.domElement;
-  hint.classList.toggle("hidden", pointerLocked);
-}
+  const ground = BABYLON.MeshBuilder.CreateGroundFromHeightMap(
+    "ground",
+    "https://assets.babylonjs.com/environments/villageheightmap.png",
+    {
+      width: 360,
+      height: 360,
+      subdivisions: 180,
+      minHeight: -2,
+      maxHeight: 8,
+    },
+    scene
+  );
+  ground.receiveShadows = true;
+  ground.checkCollisions = true;
 
-renderer.domElement.addEventListener("click", () => {
-  if (!pointerLocked) {
-    lockPointer();
-  }
-});
+  const groundMaterial = new BABYLON.PBRMaterial("groundMaterial", scene);
+  groundMaterial.albedoTexture = new BABYLON.Texture(
+    "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/forest_ground_02/forest_ground_02_diff_1k.jpg",
+    scene
+  );
+  groundMaterial.bumpTexture = new BABYLON.Texture(
+    "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/forest_ground_02/forest_ground_02_nor_gl_1k.jpg",
+    scene
+  );
+  groundMaterial.metallicTexture = new BABYLON.Texture(
+    "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/forest_ground_02/forest_ground_02_rough_1k.jpg",
+    scene
+  );
+  groundMaterial.metallicTexture.getAlphaFromRGB = true;
+  groundMaterial.metallic = 0.1;
+  groundMaterial.roughness = 0.95;
+  groundMaterial.albedoTexture.uScale = 20;
+  groundMaterial.albedoTexture.vScale = 20;
+  groundMaterial.bumpTexture.uScale = 20;
+  groundMaterial.bumpTexture.vScale = 20;
+  groundMaterial.metallicTexture.uScale = 20;
+  groundMaterial.metallicTexture.vScale = 20;
+  ground.material = groundMaterial;
 
-document.addEventListener("pointerlockchange", onPointerLockChange);
+  const river = BABYLON.MeshBuilder.CreateGround(
+    "river",
+    { width: 140, height: 24, subdivisions: 1 },
+    scene
+  );
+  river.position = new BABYLON.Vector3(0, 0.2, -20);
+  river.rotation.y = BABYLON.Tools.ToRadians(12);
 
-document.addEventListener("mousemove", (event) => {
-  if (!pointerLocked) return;
-  yaw -= event.movementX * lookSpeed;
-  pitch -= event.movementY * lookSpeed;
-  pitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, pitch));
-});
+  const waterMaterial = new BABYLON.PBRMaterial("waterMaterial", scene);
+  waterMaterial.albedoColor = new BABYLON.Color3(0.04, 0.2, 0.2);
+  waterMaterial.metallic = 0.1;
+  waterMaterial.roughness = 0.1;
+  waterMaterial.clearCoat.isEnabled = true;
+  waterMaterial.clearCoat.intensity = 0.6;
+  waterMaterial.reflectivityColor = new BABYLON.Color3(0.2, 0.35, 0.35);
+  waterMaterial.alpha = 0.9;
+  waterMaterial.bumpTexture = new BABYLON.Texture(
+    "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/water_002/water_002_nor_gl_1k.jpg",
+    scene
+  );
+  waterMaterial.bumpTexture.uScale = 4;
+  waterMaterial.bumpTexture.vScale = 4;
+  river.material = waterMaterial;
+  river.receiveShadows = true;
 
-document.addEventListener("keydown", (event) => {
-  keys.add(event.key.toLowerCase());
-});
+  const treeContainer = await BABYLON.SceneLoader.ImportMeshAsync(
+    "",
+    "https://assets.babylonjs.com/meshes/",
+    "Tree.glb",
+    scene
+  );
 
-document.addEventListener("keyup", (event) => {
-  keys.delete(event.key.toLowerCase());
-});
+  const treeMeshes = treeContainer.meshes.filter(
+    (mesh) => mesh instanceof BABYLON.Mesh && mesh.getTotalVertices() > 0
+  );
 
-function updateMovement(delta) {
-  if (!pointerLocked) return;
-
-  const direction = new THREE.Vector3();
-  const forward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
-  const right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
-
-  if (keys.has("w") || keys.has("arrowup")) direction.add(forward);
-  if (keys.has("s") || keys.has("arrowdown")) direction.sub(forward);
-  if (keys.has("d") || keys.has("arrowright")) direction.add(right);
-  if (keys.has("a") || keys.has("arrowleft")) direction.sub(right);
-
-  if (direction.lengthSq() > 0) {
-    direction.normalize();
-    camera.position.addScaledVector(direction, walkSpeed * delta);
-  }
-
-  camera.position.y = 1.6 + Math.sin(clock.elapsedTime * 6) * 0.03;
-}
-
-function animate() {
-  const delta = clock.getDelta();
-  updateMovement(delta);
-
-  camera.rotation.set(pitch, yaw, 0, "YXZ");
-
-  fireflies.children.forEach((glow, index) => {
-    glow.position.y += Math.sin(clock.elapsedTime * 1.5 + index) * 0.002;
+  treeMeshes.forEach((mesh) => {
+    mesh.isVisible = false;
+    mesh.receiveShadows = true;
+    shadowGenerator.addShadowCaster(mesh);
   });
 
-  renderer.render(scene, camera);
-  requestAnimationFrame(animate);
-}
+  const matrixData = [];
+  const treeCount = 280;
+  for (let i = 0; i < treeCount; i += 1) {
+    const radius = 40 + Math.random() * 140;
+    const angle = Math.random() * Math.PI * 2;
+    const x = Math.cos(angle) * radius + (Math.random() - 0.5) * 25;
+    const z = Math.sin(angle) * radius + (Math.random() - 0.5) * 25;
+    if (Math.abs(x) < 12 && Math.abs(z) < 18) {
+      i -= 1;
+      continue;
+    }
+    const y = 0.5;
+    const scale = 1.2 + Math.random() * 1.6;
+    const rotation = BABYLON.Quaternion.FromEulerAngles(0, Math.random() * Math.PI * 2, 0);
+    const matrix = BABYLON.Matrix.Compose(
+      new BABYLON.Vector3(scale, scale, scale),
+      rotation,
+      new BABYLON.Vector3(x, y, z)
+    );
+    matrixData.push(...matrix.m);
+  }
 
-animate();
+  treeMeshes.forEach((mesh) => {
+    mesh.thinInstanceSetBuffer("matrix", matrixData, 16, true);
+  });
+
+  const fireflyMaterial = new BABYLON.StandardMaterial("fireflyMaterial", scene);
+  fireflyMaterial.emissiveColor = new BABYLON.Color3(1, 0.9, 0.6);
+  fireflyMaterial.disableLighting = true;
+
+  const fireflies = [];
+  for (let i = 0; i < 45; i += 1) {
+    const firefly = BABYLON.MeshBuilder.CreateSphere(`firefly-${i}`,
+      { diameter: 0.18, segments: 8 },
+      scene
+    );
+    firefly.material = fireflyMaterial;
+    firefly.position = new BABYLON.Vector3(
+      (Math.random() - 0.5) * 30,
+      2 + Math.random() * 6,
+      (Math.random() - 0.5) * 30
+    );
+    fireflies.push(firefly);
+  }
+
+  const pipeline = new BABYLON.DefaultRenderingPipeline(
+    "pipeline",
+    true,
+    scene,
+    [camera]
+  );
+  pipeline.bloomEnabled = true;
+  pipeline.bloomWeight = 0.35;
+  pipeline.bloomKernel = 64;
+  pipeline.bloomThreshold = 0.8;
+  pipeline.fxaaEnabled = true;
+  pipeline.imageProcessing.contrast = 1.2;
+  pipeline.imageProcessing.exposure = 1.1;
+
+  scene.onBeforeRenderObservable.add(() => {
+    const time = performance.now() * 0.001;
+    fireflies.forEach((firefly, index) => {
+      firefly.position.y += Math.sin(time * 1.4 + index) * 0.005;
+      firefly.position.x += Math.cos(time * 0.7 + index) * 0.002;
+    });
+    waterMaterial.bumpTexture.uOffset = time * 0.02;
+    waterMaterial.bumpTexture.vOffset = time * 0.015;
+  });
+
+  canvas.addEventListener("click", () => {
+    if (document.pointerLockElement !== canvas) {
+      canvas.requestPointerLock();
+    }
+  });
+
+  document.addEventListener("pointerlockchange", () => {
+    const locked = document.pointerLockElement === canvas;
+    hint.classList.toggle("hidden", locked);
+  });
+
+  return scene;
+};
+
+createScene().then((scene) => {
+  engine.runRenderLoop(() => {
+    scene.render();
+  });
+});
 
 window.addEventListener("resize", () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  engine.resize();
 });
