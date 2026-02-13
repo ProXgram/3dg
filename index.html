@@ -9,7 +9,12 @@
   <body>
     <div class="hud">
       <h1>Forest Walk</h1>
-      <p>Click to lock the pointer. Use WASD / Arrow keys to walk. Move the mouse to look around.</p>
+      <p>Click to lock pointer, move with WASD, and collect all cyan wisps before time runs out.</p>
+      <div class="stats">
+        <div><span>Wisps</span><strong id="score">0/0</strong></div>
+        <div><span>Time</span><strong id="timer">60.0s</strong></div>
+      </div>
+      <p id="status" class="status">Find every cyan forest wisp before time runs out.</p>
     </div>
     <div id="scene"></div>
     <div class="hint" id="hint">Click anywhere to begin</div>

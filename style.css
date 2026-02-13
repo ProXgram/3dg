@@ -21,9 +21,9 @@ body {
   top: 1.5rem;
   left: 1.5rem;
   z-index: 2;
-  max-width: 320px;
+  max-width: 360px;
   padding: 1rem 1.25rem;
-  background: rgba(8, 18, 9, 0.7);
+  background: rgba(8, 18, 9, 0.72);
   border: 1px solid rgba(130, 180, 110, 0.4);
   border-radius: 12px;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35);
@@ -32,6 +32,45 @@ body {
 .hud h1 {
   font-size: 1.5rem;
   margin-bottom: 0.35rem;
+}
+
+.hud p {
+  line-height: 1.4;
+}
+
+.stats {
+  display: flex;
+  gap: 1.1rem;
+  margin-top: 0.8rem;
+}
+
+.stats div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  background: rgba(12, 26, 13, 0.66);
+  border: 1px solid rgba(140, 200, 120, 0.22);
+  border-radius: 8px;
+  padding: 0.45rem 0.65rem;
+  min-width: 88px;
+}
+
+.stats span {
+  font-size: 0.75rem;
+  opacity: 0.82;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.stats strong {
+  font-size: 1.1rem;
+  color: #b5ffd1;
+}
+
+.status {
+  margin-top: 0.75rem;
+  font-size: 0.95rem;
+  color: #d9ffe8;
 }
 
 .hint {
