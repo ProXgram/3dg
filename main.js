@@ -2,6 +2,9 @@ import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.m
 
 const container = document.getElementById("scene");
 const hint = document.getElementById("hint");
+const scoreLabel = document.getElementById("score");
+const timerLabel = document.getElementById("timer");
+const statusLabel = document.getElementById("status");
 
 const scene = new THREE.Scene();
 scene.fog = new THREE.Fog(0x0f1d10, 10, 140);
@@ -88,14 +91,31 @@ const fireflyMaterial = new THREE.MeshStandardMaterial({
   emissive: 0xfff0a0,
   emissiveIntensity: 1,
 });
-for (let i = 0; i < 30; i += 1) {
+const collectibleMaterial = new THREE.MeshStandardMaterial({
+  color: 0x7fffd4,
+  emissive: 0x59ffd0,
+  emissiveIntensity: 1.25,
+});
+
+for (let i = 0; i < 24; i += 1) {
   const glow = new THREE.Mesh(new THREE.SphereGeometry(0.08, 12, 12), fireflyMaterial);
   glow.position.set(
     (Math.random() - 0.5) * 40,
     1.5 + Math.random() * 4,
     (Math.random() - 0.5) * 40
   );
+  glow.userData.offset = Math.random() * Math.PI * 2;
   fireflies.add(glow);
+}
+
+const collectibles = [];
+for (let i = 0; i < 6; i += 1) {
+  const wisp = new THREE.Mesh(new THREE.SphereGeometry(0.14, 14, 14), collectibleMaterial);
+  wisp.position.set((Math.random() - 0.5) * 36, 1.5 + Math.random() * 2, (Math.random() - 0.5) * 36);
+  wisp.userData.offset = Math.random() * Math.PI * 2;
+  wisp.castShadow = true;
+  collectibles.push(wisp);
+  fireflies.add(wisp);
 }
 scene.add(fireflies);
 
@@ -108,6 +128,29 @@ let pitch = 0;
 
 const walkSpeed = 6;
 const lookSpeed = 0.0025;
+const gameDuration = 60;
+let score = 0;
+let gameOver = false;
+const startTime = performance.now();
+
+function updateHud() {
+  const elapsed = (performance.now() - startTime) / 1000;
+  const remaining = Math.max(0, gameDuration - elapsed);
+
+  scoreLabel.textContent = `${score}/${collectibles.length}`;
+  timerLabel.textContent = `${remaining.toFixed(1)}s`;
+
+  if (gameOver) {
+    statusLabel.textContent = score === collectibles.length ? "All wisps found!" : "Time up!";
+    return;
+  }
+
+  statusLabel.textContent = "Find every cyan forest wisp before time runs out.";
+
+  if (remaining <= 0) {
+    gameOver = true;
+  }
+}
 
 function lockPointer() {
   renderer.domElement.requestPointerLock();
@@ -119,7 +162,7 @@ function onPointerLockChange() {
 }
 
 renderer.domElement.addEventListener("click", () => {
-  if (!pointerLocked) {
+  if (!pointerLocked && !gameOver) {
     lockPointer();
   }
 });
@@ -127,7 +170,7 @@ renderer.domElement.addEventListener("click", () => {
 document.addEventListener("pointerlockchange", onPointerLockChange);
 
 document.addEventListener("mousemove", (event) => {
-  if (!pointerLocked) return;
+  if (!pointerLocked || gameOver) return;
   yaw -= event.movementX * lookSpeed;
   pitch -= event.movementY * lookSpeed;
   pitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, pitch));
@@ -142,7 +185,7 @@ document.addEventListener("keyup", (event) => {
 });
 
 function updateMovement(delta) {
-  if (!pointerLocked) return;
+  if (!pointerLocked || gameOver) return;
 
   const direction = new THREE.Vector3();
   const forward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
@@ -161,6 +204,24 @@ function updateMovement(delta) {
   camera.position.y = 1.6 + Math.sin(clock.elapsedTime * 6) * 0.03;
 }
 
+function updateCollectibles() {
+  if (gameOver) return;
+
+  collectibles.forEach((wisp) => {
+    if (!wisp.visible) return;
+
+    wisp.position.y += Math.sin(clock.elapsedTime * 2 + wisp.userData.offset) * 0.004;
+
+    if (camera.position.distanceTo(wisp.position) < 1.1) {
+      wisp.visible = false;
+      score += 1;
+      if (score === collectibles.length) {
+        gameOver = true;
+      }
+    }
+  });
+}
+
 function animate() {
   const delta = clock.getDelta();
   updateMovement(delta);
@@ -168,13 +229,18 @@ function animate() {
   camera.rotation.set(pitch, yaw, 0, "YXZ");
 
   fireflies.children.forEach((glow, index) => {
-    glow.position.y += Math.sin(clock.elapsedTime * 1.5 + index) * 0.002;
+    if (!glow.visible) return;
+    glow.position.y += Math.sin(clock.elapsedTime * 1.5 + index + glow.userData.offset) * 0.002;
   });
+
+  updateCollectibles();
+  updateHud();
 
   renderer.render(scene, camera);
   requestAnimationFrame(animate);
 }
 
+updateHud();
 animate();
 
 window.addEventListener("resize", () => {
